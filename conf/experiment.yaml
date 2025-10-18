@@ -1,0 +1,109 @@
+# IoMT Swarm Range - Experiment Configuration
+experiment_id: "exp_default"
+random_seed: 1729
+
+# Network topology
+topology:
+  wards: 4
+  devices_per_ward:
+    infusion_pump: 25
+    ecg_monitor: 30
+    ventilator: 10
+  segments:
+    - ICU
+    - Radiology
+    - Lab
+    - Admin
+  vlan_config:
+    ICU: "10.0.1.0/24"
+    Radiology: "10.0.2.0/24"
+    Lab: "10.0.3.0/24"
+    Admin: "10.0.4.0/24"
+
+# Sensor configuration
+sensors:
+  enable_zeek: true
+  enable_suricata: true
+  sampling:
+    flow_window_s: 2
+    packet_sample_rate: 1.0
+
+# Messaging bus
+messaging:
+  bus: "mqtt"
+  broker_host: "mqtt-broker"
+  broker_port: 1883
+  tls: false
+  auth: "password"
+  username: "iomt_agent"
+  password: "changeme"
+
+# Swarm algorithms
+swarm:
+  abc:
+    n_bees: 50
+    alpha: 1.0
+    beta: 0.3
+    gamma: 0.1
+    iters: 100
+    stagnation_limit: 10
+  pso:
+    particles: 32
+    omega: 0.72
+    c1: 1.49
+    c2: 1.49
+    iters_per_window: 3
+    resource_bounds:
+      cpu: [0.5, 4.0]
+      mem: [1.0, 8.0]
+      bw: [10.0, 1000.0]
+  aco:
+    n_ants: 20
+    alpha: 1.0
+    beta: 2.0
+    rho: 0.3
+    pheromone_init: 0.1
+    q: 100
+
+# Detection thresholds
+thresholds:
+  anomaly_score: 0.8
+  consensus_min_agents: 2
+
+# Evaluation settings
+evaluation:
+  duration_s: 900
+  warmup_s: 60
+  metrics:
+    - coverage
+    - fpr
+    - fnr
+    - tpr
+    - latency_ms
+    - consensus_rate
+    - resource_usage
+
+# Dataset configuration
+datasets:
+  pcap_replay:
+    - "datasets/cic_iomt_2024/benign/*.pcap"
+    - "datasets/cic_iomt_2024/attacks/*.pcap"
+  synthetic_profiles:
+    - dns_drip
+    - volumetric_burst
+    - mqtt_abuse
+    - protocol_anomaly
+
+# Export settings
+export:
+  formats:
+    - csv
+    - parquet
+  output_dir: "results/"
+  compression: "gzip"
+
+# Logging
+logging:
+  level: "INFO"
+  format: "json"
+  file: "logs/iomt-range.log"

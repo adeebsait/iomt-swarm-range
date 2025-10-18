@@ -9,6 +9,15 @@ description = "Swarm Intelligence Cyber Range for Healthcare IoT Security"
 authors = ["Research Team <research@example.edu>"]
 readme = "README.md"
 license = "Apache-2.0"
+packages = [
+    { include = "swarm" },
+    { include = "sensors" },
+    { include = "devices" },
+    { include = "injector" },
+    { include = "training" },
+    { include = "analysis" },
+    { include = "scripts" },
+]
 keywords = ["iot", "cybersecurity", "swarm-intelligence", "healthcare", "cyber-range"]
 classifiers = [
     "Development Status :: 3 - Alpha",
