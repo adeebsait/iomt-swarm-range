@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # MQTT Broker - Central message bus
+  mqtt-broker:
+    image: eclipse-mosquitto:2.0
+    container_name: iomt-mqtt-broker
+    ports:
+      - "1883:1883"      # MQTT
+      - "9001:9001"      # WebSockets
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    networks:
+      - iomt-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Infusion Pump Simulator
+  infusion-pump-1:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.device
+    container_name: iomt-pump-1
+    environment:
+      - DEVICE_TYPE=infusion_pump
+      - DEVICE_ID=pump_001
+      - MQTT_BROKER=mqtt-broker
+      - MQTT_PORT=1883
+      - WARD=ICU
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    networks:
+      - iomt-network
+    restart: unless-stopped
+
+  # ECG Monitor Simulator
+  ecg-monitor-1:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.device
+    container_name: iomt-ecg-1
+    environment:
+      - DEVICE_TYPE=ecg_monitor
+      - DEVICE_ID=ecg_001
+      - MQTT_BROKER=mqtt-broker
+      - MQTT_PORT=1883
+      - WARD=ICU
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    networks:
+      - iomt-network
+    restart: unless-stopped
+
+  # Ventilator Simulator
+  ventilator-1:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.device
+    container_name: iomt-vent-1
+    environment:
+      - DEVICE_TYPE=ventilator
+      - DEVICE_ID=vent_001
+      - MQTT_BROKER=mqtt-broker
+      - MQTT_PORT=1883
+      - WARD=ICU
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    networks:
+      - iomt-network
+    restart: unless-stopped
+
+  # MQTT Monitor (for debugging)
+  mqtt-monitor:
+    image: eclipse-mosquitto:2.0
+    container_name: iomt-mqtt-monitor
+    entrypoint: /bin/sh
+    command: -c "mosquitto_sub -h mqtt-broker -t 'iomt/#' -v"
+    depends_on:
+      mqtt-broker:
+        condition: service_healthy
+    networks:
+      - iomt-network
+    restart: unless-stopped
+
+networks:
+  iomt-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:

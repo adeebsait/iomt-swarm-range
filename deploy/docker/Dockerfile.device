@@ -1,0 +1,31 @@
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for layer caching
+COPY pyproject.toml poetry.lock* ./
+
+# Install Poetry
+RUN pip install --no-cache-dir poetry
+
+# Install dependencies
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-root --only main
+
+# Copy application code
+COPY devices/ ./devices/
+COPY swarm/ ./swarm/
+COPY sensors/ ./sensors/
+
+# Create entrypoint script
+COPY deploy/docker/device-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
