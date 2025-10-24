@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoMT Swarm Cyber Range - Live Dashboard</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .status-bar {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            backdrop-filter: blur(10px);
+        }
+        
+        .status-item {
+            text-align: center;
+        }
+        
+        .status-item .label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+        
+        .status-item .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .status-online {
+            color: #4ade80;
+        }
+        
+        .status-offline {
+            color: #f87171;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+        
+        .card h2 {
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+            padding-bottom: 10px;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .metric:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-label {
+            opacity: 0.8;
+        }
+        
+        .metric-value {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        
+        .chart {
+            height: 300px;
+            margin-top: 15px;
+        }
+        
+        .alarm {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid #ef4444;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            opacity: 0.7;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏥 IoMT Swarm Cyber Range</h1>
+        <p>Real-Time Medical Device Monitoring & Swarm Intelligence</p>
+    </div>
+    
+    <div class="status-bar">
+        <div class="status-item">
+            <div class="label">ECG Monitor</div>
+            <div class="value status-offline" id="ecg-status">●</div>
+        </div>
+        <div class="status-item">
+            <div class="label">Ventilator</div>
+            <div class="value status-offline" id="vent-status">●</div>
+        </div>
+        <div class="status-item">
+            <div class="label">Infusion Pump</div>
+            <div class="value status-offline" id="pump-status">●</div>
+        </div>
+        <div class="status-item">
+            <div class="label">Messages/min</div>
+            <div class="value" id="msg-rate">0</div>
+        </div>
+    </div>
+    
+    <div class="grid">
+        <!-- ECG Monitor Card -->
+        <div class="card">
+            <h2>💓 ECG Monitor (ecg_001)</h2>
+            <div class="metric">
+                <span class="metric-label">Heart Rate</span>
+                <span class="metric-value" id="ecg-hr">-- BPM</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">SpO2</span>
+                <span class="metric-value" id="ecg-spo2">-- %</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Blood Pressure</span>
+                <span class="metric-value" id="ecg-bp">--/-- mmHg</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Temperature</span>
+                <span class="metric-value" id="ecg-temp">-- °C</span>
+            </div>
+            <div class="chart" id="ecg-chart"></div>
+            <div id="ecg-alarm" style="display:none;" class="alarm">
+                ⚠️ <span id="ecg-alarm-text"></span>
+            </div>
+        </div>
+        
+        <!-- Ventilator Card -->
+        <div class="card">
+            <h2>🫁 Ventilator (vent_001)</h2>
+            <div class="metric">
+                <span class="metric-label">Minute Volume</span>
+                <span class="metric-value" id="vent-mv">-- L/min</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Peak Pressure</span>
+                <span class="metric-value" id="vent-peak">-- cmH₂O</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">SpO2</span>
+                <span class="metric-value" id="vent-spo2">-- %</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">EtCO2</span>
+                <span class="metric-value" id="vent-etco2">-- mmHg</span>
+            </div>
+            <div class="chart" id="vent-chart"></div>
+            <div id="vent-alarm" style="display:none;" class="alarm">
+                ⚠️ <span id="vent-alarm-text"></span>
+            </div>
+        </div>
+        
+        <!-- Infusion Pump Card -->
+        <div class="card">
+            <h2>💉 Infusion Pump (pump_001)</h2>
+            <div class="metric">
+                <span class="metric-label">Status</span>
+                <span class="metric-value" id="pump-status-text">--</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Rate</span>
+                <span class="metric-value" id="pump-rate">-- mL/hr</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Volume Infused</span>
+                <span class="metric-value" id="pump-volume">-- mL</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Battery</span>
+                <span class="metric-value" id="pump-battery">-- %</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Medication</span>
+                <span class="metric-value" id="pump-med">--</span>
+            </div>
+            <div id="pump-alarm" style="display:none;" class="alarm">
+                ⚠️ <span id="pump-alarm-text"></span>
+            </div>
+        </div>
+        
+        <!-- Swarm Status Card -->
+        <div class="card">
+            <h2>🐝 Swarm Intelligence Status</h2>
+            <div class="metric">
+                <span class="metric-label">ABC (Sensor Placement)</span>
+                <span class="metric-value status-offline" id="abc-status">Inactive</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">PSO (Resource Allocation)</span>
+                <span class="metric-value status-offline" id="pso-status">Inactive</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">ACO (Alert Routing)</span>
+                <span class="metric-value status-offline" id="aco-status">Inactive</span>
+            </div>
+            <p style="margin-top: 20px; opacity: 0.7; font-size: 0.9rem;">
+                Swarm algorithms will activate when scenarios are running.
+            </p>
+        </div>
+    </div>
+    
+    <div class="footer">
+        IoMT Swarm Cyber Range Dashboard | Connected: <span id="connection-status">Connecting...</span>
+    </div>
+    
+    <script>
+        // Socket.IO connection
+        const socket = io();
+        
+        // Message counter for rate calculation
+        let messageCount = 0;
+        let lastRateUpdate = Date.now();
+        
+        // Chart data storage
+        const chartData = {
+            ecg_hr: [],
+            ecg_spo2: [],
+            vent_mv: [],
+            vent_peak: [],
+            timestamps: []
+        };
+        
+        // Initialize charts
+        const ecgLayout = {
+            title: 'Heart Rate Trend',
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(255,255,255,0.05)',
+            font: { color: '#fff' },
+            xaxis: { title: 'Time', showgrid: false },
+            yaxis: { title: 'BPM' },
+            margin: { t: 40, b: 40, l: 50, r: 20 }
+        };
+        
+        const ventLayout = {
+            title: 'Minute Volume Trend',
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(255,255,255,0.05)',
+            font: { color: '#fff' },
+            xaxis: { title: 'Time', showgrid: false },
+            yaxis: { title: 'L/min' },
+            margin: { t: 40, b: 40, l: 50, r: 20 }
+        };
+        
+        Plotly.newPlot('ecg-chart', [{ y: [], mode: 'lines', line: { color: '#4ade80' } }], ecgLayout, { responsive: true });
+        Plotly.newPlot('vent-chart', [{ y: [], mode: 'lines', line: { color: '#60a5fa' } }], ventLayout, { responsive: true });
+        
+        // Socket event handlers
+        socket.on('connect', () => {
+            document.getElementById('connection-status').textContent = 'Connected ✓';
+            document.getElementById('connection-status').style.color = '#4ade80';
+        });
+        
+        socket.on('disconnect', () => {
+            document.getElementById('connection-status').textContent = 'Disconnected ✗';
+            document.getElementById('connection-status').style.color = '#f87171';
+        });
+        
+        socket.on('telemetry_update', (msg) => {
+            messageCount++;
+            updateMessageRate();
+            
+            const { device_id, data } = msg;
+            
+            if (device_id === 'ecg_001') {
+                updateECG(data);
+            } else if (device_id === 'vent_001') {
+                updateVentilator(data);
+            } else if (device_id === 'pump_001') {
+                updatePump(data);
+            }
+        });
+        
+        function updateECG(data) {
+            document.getElementById('ecg-status').className = 'value status-online';
+            document.getElementById('ecg-hr').textContent = data.vital_signs.heart_rate_bpm + ' BPM';
+            document.getElementById('ecg-spo2').textContent = data.vital_signs.spo2_percent + ' %';
+            document.getElementById('ecg-bp').textContent = data.vital_signs.systolic_bp_mmhg + '/' + data.vital_signs.diastolic_bp_mmhg + ' mmHg';
+            document.getElementById('ecg-temp').textContent = data.vital_signs.temperature_c + ' °C';
+            
+            // Update chart
+            chartData.ecg_hr.push(data.vital_signs.heart_rate_bpm);
+            if (chartData.ecg_hr.length > 50) chartData.ecg_hr.shift();
+            Plotly.update('ecg-chart', { y: [chartData.ecg_hr] });
+            
+            // Alarm handling
+            if (data.alarm_active) {
+                document.getElementById('ecg-alarm').style.display = 'block';
+                document.getElementById('ecg-alarm-text').textContent = data.alarm_type.toUpperCase();
+            } else {
+                document.getElementById('ecg-alarm').style.display = 'none';
+            }
+        }
+        
+        function updateVentilator(data) {
+            document.getElementById('vent-status').className = 'value status-online';
+            document.getElementById('vent-mv').textContent = data.measurements.minute_volume_l.toFixed(2) + ' L/min';
+            document.getElementById('vent-peak').textContent = data.measurements.peak_pressure_cmh2o + ' cmH₂O';
+            document.getElementById('vent-spo2').textContent = data.measurements.spo2_percent + ' %';
+            document.getElementById('vent-etco2').textContent = data.measurements.etco2_mmhg + ' mmHg';
+            
+            // Update chart
+            chartData.vent_mv.push(data.measurements.minute_volume_l);
+            if (chartData.vent_mv.length > 50) chartData.vent_mv.shift();
+            Plotly.update('vent-chart', { y: [chartData.vent_mv] });
+            
+            // Alarm handling
+            if (data.status.alarm_active) {
+                document.getElementById('vent-alarm').style.display = 'block';
+                document.getElementById('vent-alarm-text').textContent = data.status.alarm_type.toUpperCase();
+            } else {
+                document.getElementById('vent-alarm').style.display = 'none';
+            }
+        }
+        
+        function updatePump(data) {
+            document.getElementById('pump-status').className = 'value status-online';
+            document.getElementById('pump-status-text').textContent = data.status.toUpperCase();
+            document.getElementById('pump-rate').textContent = data.infusion_rate_ml_hr.toFixed(2) + ' mL/hr';
+            document.getElementById('pump-volume').textContent = data.volume_infused_ml.toFixed(2) + ' mL';
+            document.getElementById('pump-battery').textContent = data.battery_percent.toFixed(1) + ' %';
+            document.getElementById('pump-med').textContent = data.medication;
+            
+            // Alarm handling
+            if (data.alarm_active) {
+                document.getElementById('pump-alarm').style.display = 'block';
+                document.getElementById('pump-alarm-text').textContent = data.alarm_type.toUpperCase();
+            } else {
+                document.getElementById('pump-alarm').style.display = 'none';
+            }
+        }
+        
+        function updateMessageRate() {
+            const now = Date.now();
+            const elapsed = (now - lastRateUpdate) / 1000;
+            
+            if (elapsed >= 1) {
+                const rate = Math.round(messageCount / elapsed * 60);
+                document.getElementById('msg-rate').textContent = rate;
+                messageCount = 0;
+                lastRateUpdate = now;
+            }
+        }
+        
+        // Update every second
+        setInterval(updateMessageRate, 1000);
+    </script>
+</body>
+</html>
