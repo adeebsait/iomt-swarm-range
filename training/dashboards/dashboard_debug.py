@@ -1,6 +1,4 @@
-"""
-Real-Time IoMT Cyber Range Dashboard - FIXED VERSION
-"""
+"""Debug version with extra logging"""
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 import paho.mqtt.client as mqtt
@@ -8,11 +6,8 @@ import json
 import logging
 from datetime import datetime
 from collections import deque
-import eventlet
 
-eventlet.monkey_patch()
-
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -32,71 +27,62 @@ device_status = {
 }
 
 mqtt_client = None
-
+message_count = 0
 
 def on_mqtt_connect(client, userdata, flags, reason_code, properties):
-    logger.info(f"Dashboard connected to MQTT: {reason_code}")
+    logger.info(f"MQTT Connected: {reason_code}")
     client.subscribe("iomt/telemetry/#")
     logger.info("Subscribed to iomt/telemetry/#")
 
-
 def on_mqtt_message(client, userdata, msg):
-    """MQTT callback - emit to SocketIO with eventlet"""
+    global message_count
+    message_count += 1
+    
+    logger.info(f"Message #{message_count} on topic: {msg.topic}")
+    
     try:
         data = json.loads(msg.payload.decode())
         device_id = data.get('device_id')
+        
+        logger.info(f"Device ID: {device_id}")
         
         if device_id in device_data:
             device_data[device_id].append(data)
             device_status[device_id]['online'] = True
             device_status[device_id]['last_seen'] = datetime.now()
             
-            # KEY FIX: Use eventlet to emit in correct context
-            socketio.start_background_task(
-                socketio.emit,
-                'telemetry_update',
-                {'device_id': device_id, 'data': data}
-            )
+            logger.info(f"Updated {device_id} to ONLINE")
             
-            logger.info(f"Emitted telemetry for {device_id}")
-                
     except Exception as e:
-        logger.error(f"Error: {e}")
-
+        logger.error(f"Error: {e}", exc_info=True)
 
 def start_mqtt_client():
-    """Start MQTT in background"""
     global mqtt_client
     
     mqtt_client = mqtt.Client(
-        client_id="dashboard",
+        client_id="dashboard_debug",
         protocol=mqtt.MQTTv5,
         callback_api_version=mqtt.CallbackAPIVersion.VERSION2
     )
     mqtt_client.on_connect = on_mqtt_connect
     mqtt_client.on_message = on_mqtt_message
     
-    mqtt_client.connect("localhost", 1883, 60)
-    mqtt_client.loop_start()
-    logger.info("MQTT client started")
-
+    try:
+        logger.info("Connecting to MQTT at localhost:1883...")
+        mqtt_client.connect("localhost", 1883, 60)
+        mqtt_client.loop_start()
+        logger.info("MQTT loop started")
+    except Exception as e:
+        logger.error(f"MQTT connection failed: {e}")
 
 @app.route('/')
 def index():
-    return render_template('dashboard.html')
+    return "<h1>Debug Dashboard</h1><p>Check terminal for logs</p>"
 
-
-@socketio.on('connect')
-def handle_connect(auth=None):
-    logger.info("Client connected")
-
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    logger.info("Client disconnected")
-
+def run_dashboard(host='0.0.0.0', port=5001):
+    start_mqtt_client()
+    logger.info(f"Starting DEBUG dashboard on http://{host}:{port}")
+    socketio.run(app, host=host, port=port, debug=False)
 
 if __name__ == '__main__':
-    start_mqtt_client()
-    logger.info("Starting dashboard on http://0.0.0.0:5000")
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
+    run_dashboard()
