@@ -67,3 +67,6 @@ injector/datasets/*.tar.gz
 # Temporary files
 *.tmp
 .cache/
+
+# Keep CSV structure but ignore data files
+results/raw/*.csv
