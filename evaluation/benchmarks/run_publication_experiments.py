@@ -101,14 +101,14 @@ class PublicationOrchestrator:
         
         algorithms = ['ABC', 'PSO', 'ACO', 'Hybrid', 'Baseline']
         attack_types = ['DoS', 'DataInjection']
-        
+
         if quick_mode:
-            device_scales = [3, 10]
-            trials = 5
+            device_scales = [10, 25, 50]
+            trials = 10
         else:
-            device_scales = [3, 10, 25, 50]
-            trials = trials_per_config
-        
+            device_scales = [10, 25, 50, 100, 200, 500]
+            trials = 200  # Maximum robustness
+
         total = len(algorithms) * len(attack_types) * len(device_scales) * trials
         
         logger.info("="*80)
